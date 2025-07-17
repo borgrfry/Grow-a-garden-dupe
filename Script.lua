@@ -1,94 +1,82 @@
--- Create ScreenGui
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "PetCloneGUI"
-screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+-- Creates the entire GUI, RemoteEvent, LocalScript, and ServerScript
 
--- Create big Frame
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DuplicationGui"
+screenGui.Parent = playerGui
+
+-- Frame
 local frame = Instance.new("Frame")
-frame.Name = "MainFrame"
-frame.Size = UDim2.new(0, 400, 0, 300) -- Massive frame size
-frame.Position = UDim2.new(0.5, -200, 0.5, -150) -- Center on screen
+frame.Size = UDim2.new(0, 300, 0, 50)
+frame.Position = UDim2.new(0.5, -150, 0.5, -25)
 frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 frame.Parent = screenGui
 
--- Create TextBox inside Frame
+-- TextBox
 local textBox = Instance.new("TextBox")
-textBox.Name = "PetNameBox"
-textBox.Size = UDim2.new(1, -40, 0, 50) -- Leave room for button on right
-textBox.Position = UDim2.new(0, 10, 0, 20)
-textBox.PlaceholderText = "Enter pet/tool name..."
-textBox.ClearTextOnFocus = false
-textBox.TextColor3 = Color3.new(1,1,1)
+textBox.Size = UDim2.new(0, 200, 0, 40)
+textBox.Position = UDim2.new(0, 10, 0, 5)
+textBox.PlaceholderText = "Enter Tool Name"
 textBox.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 textBox.Parent = frame
 
--- Create ImageButton inside TextBox
+-- ImageButton
 local imageButton = Instance.new("ImageButton")
-imageButton.Name = "SearchButton"
-imageButton.Size = UDim2.new(0, 30, 0, 30)
-imageButton.Position = UDim2.new(1, -35, 0, 10) -- right side inside textbox
+imageButton.Size = UDim2.new(0, 40, 0, 40)
+imageButton.Position = UDim2.new(0, 220, 0, 5)
 imageButton.Image = "rbxassetid://174762951"
-imageButton.BackgroundTransparency = 1
-imageButton.Parent = textBox
+imageButton.Parent = frame
 
--- Create RemoteEvent inside the ScreenGui
-local remoteEvent = Instance.new("RemoteEvent")
-remoteEvent.Name = "ToolCloneRemote"
-remoteEvent.Parent = screenGui
+-- RemoteEvent
+local remote = Instance.new("RemoteEvent")
+remote.Name = "RequestTool"
+remote.Parent = screenGui
 
--- Create LocalScript inside the ScreenGui
+-- LocalScript
 local localScript = Instance.new("LocalScript")
-localScript.Name = "PetCloneLocalScript"
+localScript.Source = [[
+local frame = script.Parent.Frame
+local textBox = frame.TextBox
+local button = frame.ImageButton
+local remote = script.Parent:WaitForChild("RequestTool")
+
+button.MouseButton1Click:Connect(function()
+    local toolName = textBox.Text
+    if toolName ~= "" then
+        remote:FireServer(toolName)
+    end
+end)
+]]
 localScript.Parent = screenGui
 
-localScript.Source = [[
-local Players = game:GetService("Players")
-
-local player = Players.LocalPlayer
-local screenGui = script.Parent
-local frame = screenGui:WaitForChild("MainFrame")
-local textBox = frame:WaitForChild("PetNameBox")
-local imageButton = textBox:WaitForChild("SearchButton")
-local remoteEvent = screenGui:WaitForChild("ToolCloneRemote")
-
-imageButton.MouseButton1Click:Connect(function()
-    local petName = textBox.Text
-    if petName and petName ~= "" then
-        remoteEvent:FireServer(petName)
-    else
-        warn("Please enter a tool/pet name.")
-    end
-end)
-]]
-
--- Create ServerScript inside the ScreenGui
+-- ServerScript
 local serverScript = Instance.new("Script")
-serverScript.Name = "PetCloneServerScript"
-serverScript.Parent = screenGui
-
 serverScript.Source = [[
-local remoteEvent = script.Parent:WaitForChild("ToolCloneRemote")
+local remote = script.Parent:WaitForChild("RequestTool")
 
-remoteEvent.OnServerEvent:Connect(function(player, toolName)
-    if not toolName or toolName == "" then return end
-
-    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
-        if otherPlayer ~= player then
-            local backpack = otherPlayer:FindFirstChild("Backpack")
-            if backpack then
-                local tool = backpack:FindFirstChild(toolName)
-                if tool then
-                    local clone = tool:Clone()
-                    clone.Parent = player.Backpack
-                    print(player.Name .. " cloned tool '" .. toolName .. "' from " .. otherPlayer.Name)
-                    return
-                end
-            end
+local function findToolByName(toolName)
+    toolName = toolName:lower()
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("Tool") and obj.Name:lower() == toolName then
+            return obj
         end
     end
+    return nil
+end
 
-    warn("❌ Tool '" .. toolName .. "' not found in other players' backpacks.")
+remote.OnServerEvent:Connect(function(player, toolName)
+    local foundTool = findToolByName(toolName)
+    if foundTool then
+        local clone = foundTool:Clone()
+        clone.Parent = player.Backpack
+        warn(player.Name .. " received a cloned tool: " .. foundTool.Name)
+    else
+        warn("❌ No tool found named: " .. toolName)
+    end
 end)
 ]]
-
-print("Pet Clone GUI with scripts and RemoteEvent created!")
+serverScript.Parent = screenGui
